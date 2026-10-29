@@ -8,7 +8,6 @@
 <section id="view-guest" class="view hidden"><h2>Masuk sebagai Tamu</h2><form id="formGuest"><label>Kode acara <input id="guestCode" required></label><button type="submit">Buka Acara</button></form><div id="guestResult"></div><p class="small">Upload foto tamu lewat kamera/galeri dan moderasi penuh akan ditambahkan setelah fungsi tamu terverifikasi lintas pengguna.</p></section>
 </main>
 <script src="/config.js"></script><script>
-if (typeof MOMENTARA_CONFIG === 'undefined') { var MOMENTARA_CONFIG = { supabaseUrl: 'https://zhdktpywesnpthqpxjog.supabase.co', supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpoZGt0cHl3ZXNucHRocXB4am9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNTcyNTksImV4cCI6MjEwODgzMzI1OX0.g3joPj_pbxZOyVha6wkN9sK0fw72Z23S6R8UBbfck24' }; }
 window.addEventListener('error', function(e){ var m=document.getElementById('msg'); if(m) m.textContent='Kesalahan skrip: '+(e.message||'tidak diketahui'); });
 
 const { supabaseUrl, supabaseAnonKey } = MOMENTARA_CONFIG;

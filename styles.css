@@ -131,3 +131,12 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .hero-art{max-width:380px;margin:18px auto 4px;animation:float 8s ease-in-out infinite}
 .hero-art svg{width:100%;height:auto;display:block;filter:drop-shadow(0 16px 24px rgba(32,32,31,.18))}
 .film-strip{height:20px;margin:28px 0 0;background-color:#20201F;background-image:radial-gradient(circle at 12px 10px, #F8F5EF 4px, transparent 5px),radial-gradient(circle at 36px 10px, #F8F5EF 4px, transparent 5px),radial-gradient(circle at 60px 10px, #F8F5EF 4px, transparent 5px),radial-gradient(circle at 84px 10px, #F8F5EF 4px, transparent 5px);background-size:96px 20px;background-repeat:repeat-x;border-radius:6px}
+
+/* ===== v8: ilustrasi tiap fitur + karakter ===== */
+.step-art svg,.feat-art svg,.guest-art svg,.dash-art svg{width:100%;height:auto;display:block}
+.step-art{max-width:200px;margin:0 auto 8px}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}
+.feat-card{background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.7);border-radius:18px;box-shadow:var(--shadow);padding:14px;text-align:center;font-weight:600}
+.feat-art{max-width:120px;margin:0 auto 8px}
+.guest-art,.dash-art{max-width:280px;margin:8px auto 4px}
+.cards .card{text-align:left}

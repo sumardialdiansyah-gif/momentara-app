@@ -149,7 +149,6 @@ $('formUpload').addEventListener('submit', async (e)=>{
     $('upFile').value='';
   } catch(err){ $('upMsg').textContent='Upload gagal: ' + err.message; }
 });
-re
 $('btnLogout').addEventListener('click', async ()=>{ await sb.auth.signOut(); await refreshAuth(); });
 $('formEvent').addEventListener('submit', async (e)=>{
   e.preventDefault();

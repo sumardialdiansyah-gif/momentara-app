@@ -101,3 +101,26 @@ button:active{transform:scale(.96)}
   *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
   .reveal{opacity:1;transform:none}
 }
+
+/* ===== v6: hybrid — navigasi bawah HP, kartu kaca, hero brand ===== */
+body{background:
+  radial-gradient(600px 300px at 15% -5%, rgba(217,210,240,.55), transparent 60%),
+  radial-gradient(500px 260px at 95% 10%, rgba(216,190,150,.45), transparent 60%),
+  radial-gradient(500px 300px at 50% 110%, rgba(199,210,192,.45), transparent 60%),
+  var(--ivory)}
+.card{background:rgba(255,255,255,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.7)}
+#view-home{background:linear-gradient(135deg,#D9D2F0 0%,#F8F5EF 45%,#D8BE96 100%);border:1px solid rgba(255,255,255,.8);border-radius:24px;box-shadow:var(--shadow);padding:28px 22px;margin-top:14px}
+#view-home .card{background:rgba(255,255,255,.82)}
+.bottom-nav{display:none}
+.nav button.active,.bottom-nav button.active{background:var(--champ);color:var(--ink)}
+@media (max-width:768px){
+  body{padding-bottom:96px}
+  .top{position:sticky}
+  .nav button[data-view]{display:none}
+  .bottom-nav{display:flex;position:fixed;left:12px;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:24px;box-shadow:0 16px 40px rgba(32,32,31,.22);padding:10px 8px 12px;justify-content:space-around;align-items:flex-end}
+  .bottom-nav button{background:transparent;color:var(--ink);box-shadow:none;padding:8px 10px;font-size:13px}
+  .bottom-nav button.active{background:#efe6d4}
+  .bottom-nav .fab{position:absolute;left:50%;top:-26px;transform:translateX(-50%);width:56px;height:56px;border-radius:50%;background:var(--ink);color:#fff;font-size:26px;line-height:1;padding:0;box-shadow:0 12px 24px rgba(32,32,31,.35)}
+  .bottom-nav .fab:active{transform:translateX(-50%) scale(.94)}
+  footer.site{margin-bottom:12px}
+}

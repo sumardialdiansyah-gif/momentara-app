@@ -11,7 +11,9 @@ try {
 // Navigasi selalu dipasang dulu, terlepas dari status Supabase, agar tombol tidak macet.
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
 const $ = (id) => document.getElementById(id);
-function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); }
+function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view === id)); }
+function fabAction(){ const logged = !$('btnLogout').classList.contains('hidden'); show(logged ? 'view-dashboard' : 'view-auth'); }
+window.fabAction = fabAction;
 function msg(t){ const m=$('msg'); m.textContent = t; m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop'); }
 window.addEventListener('scroll', ()=>{
   const d = document.documentElement; const max = d.scrollHeight - d.clientHeight;

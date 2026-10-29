@@ -12,13 +12,27 @@ try {
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
 const $ = (id) => document.getElementById(id);
 function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); }
-function msg(t){ $('msg').textContent = t; }
+function msg(t){ const m=$('msg'); m.textContent = t; m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop'); }
+window.addEventListener('scroll', ()=>{
+  const d = document.documentElement; const max = d.scrollHeight - d.clientHeight;
+  const bar = $('scrollProgress'); if(bar) bar.style.width = (max > 0 ? (d.scrollTop / max * 100) : 0) + '%';
+}, { passive: true });
+const revealObs = ('IntersectionObserver' in window) ? new IntersectionObserver((es)=>{ es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); revealObs.unobserve(en.target); } }); }, { threshold: 0.15 }) : null;
+function observeReveals(){ if(revealObs) document.querySelectorAll('.reveal:not(.in)').forEach(el=>revealObs.observe(el)); }
+setTimeout(observeReveals, 500);
+document.addEventListener('click', (e)=>{
+  const img = e.target.closest ? e.target.closest('#guestGallery img, #slideImg') : null;
+  if(img && img.src){ $('lightboxImg').src = img.src; $('lightbox').classList.remove('hidden'); }
+});
+$('lightboxClose').addEventListener('click', ()=>{ $('lightbox').classList.add('hidden'); });
+$('lightbox').addEventListener('click', (e)=>{ if(e.target.id === 'lightbox') $('lightbox').classList.add('hidden'); });
+document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') $('lightbox').classList.add('hidden'); });
 const FILTERS = { 'Natural': 'none', 'Warm Film': 'sepia(0.35) saturate(1.2) brightness(1.05)', 'Vintage': 'sepia(0.6) contrast(0.9) brightness(0.95)', 'Soft Portrait': 'saturate(0.9) brightness(1.08)', 'Black and White': 'grayscale(1) contrast(1.1)', 'Cool Night': 'brightness(0.9) saturate(0.7) contrast(1.1)', 'Disposable Camera': 'contrast(1.2) saturate(1.3) sepia(0.2)' };
 let guestCode = '', slidePhotos = [], slideIdx = 0, slideTimer = null;
 function renderSlide(){
   if(!slidePhotos.length){ $('slideEmpty').classList.remove('hidden'); $('slideImg').classList.add('hidden'); $('slideCap').textContent=''; return; }
   $('slideEmpty').classList.add('hidden'); const ph = slidePhotos[slideIdx];
-  $('slideImg').src = ph.storage_path; $('slideImg').classList.remove('hidden');
+  const si = $('slideImg'); si.style.opacity = 0; setTimeout(()=>{ si.src = ph.storage_path; si.style.opacity = 1; }, 120); si.classList.remove('hidden');
   $('slideCap').textContent = (ph.guest_name||'Tamu') + ' · ' + (ph.filter_name||'') + ' (' + (slideIdx+1) + '/' + slidePhotos.length + ')';
 }
 function stopSlide(){ if(slideTimer){ clearInterval(slideTimer); slideTimer=null; } $('slidePlay').textContent='Putar Otomatis'; }
@@ -88,10 +102,10 @@ async function showQR(code, boxId){
   try {
     if(window.QRCode && window.QRCode.toDataURL){
       const url = await window.QRCode.toDataURL(link, { width: 220, margin: 1 });
-      box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+      box.id = box.id; box.classList.add('qrBoxPop'); box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
     } else {
       const url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link);
-      box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+      box.id = box.id; box.classList.add('qrBoxPop'); box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
     }
   } catch(err){ box.innerHTML = '<p>QR gagal dibuat: ' + err.message + '</p>'; }
 }

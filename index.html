@@ -48,6 +48,8 @@ try {
 // Navigasi selalu dipasang dulu, terlepas dari status Supabase, agar tombol tidak macet.
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
 const $ = (id) => document.getElementById(id);
+function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function safeImgSrc(s){ const v = String(s || ''); return v.startsWith('data:image/jpeg;base64,') ? v : ''; }
 function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view === id)); }
 function fabAction(){ const logged = !$('btnLogout').classList.contains('hidden'); show(logged ? 'view-dashboard' : 'view-auth'); }
 window.fabAction = fabAction;
@@ -86,7 +88,7 @@ async function loadGuestGallery(){
   const g = await sb.rpc('get_guest_gallery', { p_code: guestCode });
   slidePhotos = (g.data && g.data.photos) ? g.data.photos : [];
   slideIdx = 0; stopSlide(); renderSlide();
-  $('guestGallery').innerHTML = slidePhotos.length ? slidePhotos.map(ph=>`<div class="card"><img src="${ph.storage_path}" style="width:100%;border-radius:12px"><br>${ph.guest_name||'Tamu'} · ${ph.filter_name||''}</div>`).join('') : '<p>Belum ada foto yang disetujui.</p>';
+  $('guestGallery').innerHTML = slidePhotos.length ? slidePhotos.map(ph=>`<div class="card"><img src="${safeImgSrc(ph.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(ph.guest_name||'Tamu')} · ${esc(ph.filter_name||'')}</div>`).join('') : '<p>Belum ada foto yang disetujui.</p>';
 }
 async function refreshAuth(){
   if(!sb){ $('authStatus').textContent = 'Layanan login belum termuat. Coba muat ulang halaman.'; show('view-home'); return; }
@@ -117,9 +119,9 @@ async function loadDashboard(){
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
   const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
   const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
-  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br>Kode tamu: <strong>${gc||'-'}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${e.name.replace(/'/g,'')}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${e.name.replace(/'/g,'')}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${encodeURIComponent(e.name)}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${encodeURIComponent(e.name)}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
-  if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${p.name}</strong> — Rp${p.price_idr.toLocaleString('id-ID')}<br>${p.photo_quota} foto · maks ${p.max_events} acara · ${p.active_days} hari</div>`).join('');
+  if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${esc(p.name)}</strong> — Rp${Number(p.price_idr||0).toLocaleString('id-ID')}<br>${Number(p.photo_quota||0)} foto · maks ${Number(p.max_events||0)} acara · ${Number(p.active_days||0)} hari</div>`).join('');
 }
 function guestLink(code){ return window.location.origin + '/?code=' + code; }
 function copyGuestLink(code){
@@ -128,7 +130,7 @@ function copyGuestLink(code){
   else { msg('Link tamu: ' + link); }
 }
 window.copyGuestLink = copyGuestLink;
-function shareGuestWA(code, name){
+function shareGuestWA(code, nameEnc){ const name = decodeURIComponent(nameEnc);
   const link = guestLink(code);
   const text = encodeURIComponent('Undangan ' + name + ': buka link ini untuk mengunggah dan melihat foto acara: ' + link);
   window.open('https://wa.me/?text=' + text, '_blank');
@@ -143,16 +145,15 @@ async function showQR(code, boxId){
       const url = await window.QRCode.toDataURL(link, { width: 220, margin: 1 });
       box.id = box.id; box.classList.add('qrBoxPop'); box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
     } else {
-      const url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link);
-      box.id = box.id; box.classList.add('qrBoxPop'); box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+      throw new Error('Pustaka QR tidak tersedia.');
     }
-  } catch(err){ box.innerHTML = '<p>QR gagal dibuat: ' + err.message + '</p>'; }
+  } catch(err){ box.innerHTML = '<p>QR gagal dibuat.</p>'; }
 }
 window.showQR = showQR;
-async function loadModeration(eventId, eventName){
+async function loadModeration(eventId, eventNameEnc){ const eventName = decodeURIComponent(eventNameEnc);
   const { data, error } = await sb.from('media_assets').select('*').eq('event_id', eventId).eq('status','pending').order('created_at', {ascending:false});
-  if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi: ' + error.message + '</p>'; return; }
-  $('moderationArea').innerHTML = '<h4>' + eventName + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${m.storage_path}" style="width:100%;border-radius:12px"><br>${m.guest_name} · ${m.filter_name}<br><button onclick="moderatePhoto('${m.id}','${eventId}','approved')">Setujui</button> <button onclick="moderatePhoto('${m.id}','${eventId}','rejected')">Tolak</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
+  if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi.</p>'; return; }
+  $('moderationArea').innerHTML = '<h4>' + esc(eventName) + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${safeImgSrc(m.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(m.guest_name)} · ${esc(m.filter_name)}<br><button onclick="moderatePhoto('${m.id}','${eventId}','approved')">Setujui</button> <button onclick="moderatePhoto('${m.id}','${eventId}','rejected')">Tolak</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
   show('view-dashboard');
 }
 window.loadModeration = loadModeration;
@@ -175,12 +176,12 @@ $('formAuth').addEventListener('submit', async (e)=>{
   if(mode === 'signup'){
     res = await sb.auth.signUp({ email, password });
     if(res.data.user){
-      await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' });
+      await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0] });
     }
   } else {
     res = await sb.auth.signInWithPassword({ email, password });
   }
-  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await refreshAuth(); }
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0] }); } msg('Berhasil.'); await refreshAuth(); }
 });
 $('formUpload').addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -206,7 +207,7 @@ $('btnLogout').addEventListener('click', async ()=>{ await sb.auth.signOut(); aw
 $('formEvent').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const { data: { user } } = await sb.auth.getUser(); if(!user){ msg('Masuk dulu sebelum membuat acara.'); return; }
-  const code = Math.random().toString(36).slice(2,8).toUpperCase();
+  const _alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const _bytes = new Uint8Array(8); crypto.getRandomValues(_bytes); const code = Array.from(_bytes, b => _alphabet[b % 32]).join('');
   const token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
   const ev = {
     owner_id: user.id, name: $('evName').value, type: $('evType').value, event_date: $('evDate').value,
@@ -215,7 +216,7 @@ $('formEvent').addEventListener('submit', async (e)=>{
     plan_id: $('evPlan').value, moderation: true, visibility: 'open', allow_download: true, allow_messages: true,
     status: 'active', upload_start: $('evDate').value + 'T00:00:00+07:00', upload_end: $('evDate').value + 'T23:59:00+07:00'
   };
-  await sb.from('profiles').upsert({ id: user.id, email: user.email, name: user.email.split('@')[0], role: 'owner' });
+  await sb.from('profiles').upsert({ id: user.id, email: user.email, name: user.email.split('@')[0] });
   const { data, error } = await sb.from('events').insert(ev).select().single();
   if(error){ msg('Gagal membuat acara: ' + error.message); return; }
   const { error: terr } = await sb.from('event_access_tokens').insert({ event_id: data.id, code, token });
@@ -229,7 +230,7 @@ $('formGuest').addEventListener('submit', async (e)=>{
   const { data, error } = await sb.rpc('get_guest_event', { p_code: code });
   if(error || !data || !data.event){ msg('Kode acara tidak valid atau sudah dicabut.'); return; }
   guestCode = code;
-  $('guestResult').innerHTML = `<div class="card"><strong>${data.event.name}</strong><br>${data.event.type} · ${data.event.event_date}<br>${data.event.description}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak — hanya pada hari acara'}</div>`;
+  $('guestResult').innerHTML = `<div class="card"><strong>${esc(data.event.name)}</strong><br>${esc(data.event.type)} · ${esc(data.event.event_date)}<br>${esc(data.event.description)}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak — hanya pada hari acara'}</div>`;
   $('guestUpload').classList.toggle('hidden', !data.uploads_open);
   $('guestShowcase').classList.remove('hidden');
   await loadGuestGallery();

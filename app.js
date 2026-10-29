@@ -1,4 +1,6 @@
 
+window.addEventListener('error', function(e){ var m=document.getElementById('msg'); if(m) m.textContent='Kesalahan skrip: '+(e.message||'tidak diketahui'); });
+
 const { supabaseUrl, supabaseAnonKey } = MOMENTARA_CONFIG;
 let sb = null;
 try {
@@ -11,6 +13,28 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', 
 const $ = (id) => document.getElementById(id);
 function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); }
 function msg(t){ $('msg').textContent = t; }
+const FILTERS = { 'Natural': 'none', 'Warm Film': 'sepia(0.35) saturate(1.2) brightness(1.05)', 'Vintage': 'sepia(0.6) contrast(0.9) brightness(0.95)', 'Soft Portrait': 'saturate(0.9) brightness(1.08)', 'Black and White': 'grayscale(1) contrast(1.1)', 'Cool Night': 'brightness(0.9) saturate(0.7) contrast(1.1)', 'Disposable Camera': 'contrast(1.2) saturate(1.3) sepia(0.2)' };
+let guestCode = '', slidePhotos = [], slideIdx = 0, slideTimer = null;
+function renderSlide(){
+  if(!slidePhotos.length){ $('slideEmpty').classList.remove('hidden'); $('slideImg').classList.add('hidden'); $('slideCap').textContent=''; return; }
+  $('slideEmpty').classList.add('hidden'); const ph = slidePhotos[slideIdx];
+  $('slideImg').src = ph.storage_path; $('slideImg').classList.remove('hidden');
+  $('slideCap').textContent = (ph.guest_name||'Tamu') + ' · ' + (ph.filter_name||'') + ' (' + (slideIdx+1) + '/' + slidePhotos.length + ')';
+}
+function stopSlide(){ if(slideTimer){ clearInterval(slideTimer); slideTimer=null; } $('slidePlay').textContent='Putar Otomatis'; }
+$('slidePrev').addEventListener('click', ()=>{ stopSlide(); if(slidePhotos.length){ slideIdx=(slideIdx-1+slidePhotos.length)%slidePhotos.length; renderSlide(); } });
+$('slideNext').addEventListener('click', ()=>{ stopSlide(); if(slidePhotos.length){ slideIdx=(slideIdx+1)%slidePhotos.length; renderSlide(); } });
+$('slidePlay').addEventListener('click', ()=>{
+  if(slideTimer){ stopSlide(); return; }
+  if(!slidePhotos.length) return;
+  $('slidePlay').textContent='Jeda'; slideTimer=setInterval(()=>{ slideIdx=(slideIdx+1)%slidePhotos.length; renderSlide(); }, 4000);
+});
+async function loadGuestGallery(){
+  const g = await sb.rpc('get_guest_gallery', { p_code: guestCode });
+  slidePhotos = (g.data && g.data.photos) ? g.data.photos : [];
+  slideIdx = 0; stopSlide(); renderSlide();
+  $('guestGallery').innerHTML = slidePhotos.length ? slidePhotos.map(ph=>`<div class="card"><img src="${ph.storage_path}" style="width:100%;border-radius:12px"><br>${ph.guest_name||'Tamu'} · ${ph.filter_name||''}</div>`).join('') : '<p>Belum ada foto yang disetujui.</p>';
+}
 async function refreshAuth(){
   if(!sb){ $('authStatus').textContent = 'Layanan login belum termuat. Coba muat ulang halaman.'; show('view-home'); return; }
   let user = null;
@@ -38,10 +62,29 @@ async function loadDashboard(){
   const { data: { user } } = await sb.auth.getUser(); if(!user) return;
   const { data, error } = await sb.from('events').select('*').eq('owner_id', user.id).order('created_at', {ascending:false});
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
-  $('eventList').innerHTML = data.length ? data.map(e=>`<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br><button onclick="openGuest('${e.id}')">Lihat sebagai tamu (butuh kode)</button></div>`).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
+  const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
+  $('eventList').innerHTML = data.length ? data.map(e=>`<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br>Kode tamu: <strong>${codeMap[e.id]||'-'}</strong><br><button onclick="loadModeration('${e.id}','${e.name.replace(/'/g,'')}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
   if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${p.name}</strong> — Rp${p.price_idr.toLocaleString('id-ID')}<br>${p.photo_quota} foto · maks ${p.max_events} acara · ${p.active_days} hari</div>`).join('');
 }
+async function loadModeration(eventId, eventName){
+  const { data, error } = await sb.from('media_assets').select('*').eq('event_id', eventId).eq('status','pending').order('created_at', {ascending:false});
+  if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi: ' + error.message + '</p>'; return; }
+  $('moderationArea').innerHTML = '<h4>' + eventName + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${m.storage_path}" style="width:100%;border-radius:12px"><br>${m.guest_name} · ${m.filter_name}<br><button onclick="moderatePhoto('${m.id}','${eventId}','approved')">Setujui</button> <button onclick="moderatePhoto('${m.id}','${eventId}','rejected')">Tolak</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
+  show('view-dashboard');
+}
+window.loadModeration = loadModeration;
+async function moderatePhoto(photoId, eventId, status){
+  const { data: { user } } = await sb.auth.getUser(); if(!user) return;
+  const { error } = await sb.from('media_assets').update({ status }).eq('id', photoId);
+  if(error){ msg('Moderasi gagal: ' + error.message); return; }
+  await sb.from('moderation_actions').insert({ event_id: eventId, target_type: 'photo', target_id: photoId, action: status, actor_id: user.id });
+  msg(status === 'approved' ? 'Foto disetujui dan kini tampil di galeri tamu.' : 'Foto ditolak.');
+  const evName = $('moderationArea').querySelector('h4') ? $('moderationArea').querySelector('h4').textContent.split(' — ')[0] : '';
+  await loadModeration(eventId, evName);
+}
+window.moderatePhoto = moderatePhoto;
 async function openGuest(id){ msg('Untuk membuka sebagai tamu, minta kode acara dari pemilik, lalu pakai formulir Tamu di bawah.'); show('view-guest'); }
 window.openGuest = openGuest;
 $('formAuth').addEventListener('submit', async (e)=>{
@@ -56,7 +99,27 @@ $('formAuth').addEventListener('submit', async (e)=>{
   } else {
     res = await sb.auth.signInWithPassword({ email, password });
   }
-  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await refreshAuth(); }
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await $('formUpload').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const file = $('upFile').files[0]; if(!file){ $('upMsg').textContent='Pilih foto dulu.'; return; }
+  const filterName = $('upFilter').value;
+  $('upMsg').textContent='Memproses foto dengan filter ' + filterName + '…';
+  try {
+    const dataUrl = await new Promise((res, rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    const img = await new Promise((res, rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=dataUrl; });
+    const maxSide = 1200; const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const cv = document.createElement('canvas'); cv.width = Math.round(img.width*scale); cv.height = Math.round(img.height*scale);
+    const ctx = cv.getContext('2d'); try { ctx.filter = FILTERS[filterName] || 'none'; } catch(err) {}
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    const filtered = cv.toDataURL('image/jpeg', 0.82);
+    $('upPreview').src = filtered; $('upPreview').classList.remove('hidden');
+    const { data, error } = await sb.rpc('upload_guest_photo', { p_code: guestCode, p_guest_name: $('upName').value.trim(), p_filter_name: filterName, p_photo_data: filtered });
+    if(error){ $('upMsg').textContent='Upload gagal: ' + error.message; return; }
+    $('upMsg').textContent='Foto terkirim dan menunggu moderasi owner. Foto belum tampil di galeri sampai disetujui.';
+    $('upFile').value='';
+  } catch(err){ $('upMsg').textContent='Upload gagal: ' + err.message; }
+});
+refreshAuth(); }
 });
 $('btnLogout').addEventListener('click', async ()=>{ await sb.auth.signOut(); await refreshAuth(); });
 $('formEvent').addEventListener('submit', async (e)=>{
@@ -84,8 +147,10 @@ $('formGuest').addEventListener('submit', async (e)=>{
   const code = $('guestCode').value.trim().toUpperCase();
   const { data, error } = await sb.rpc('get_guest_event', { p_code: code });
   if(error || !data || !data.event){ msg('Kode acara tidak valid atau sudah dicabut.'); return; }
-  $('guestResult').innerHTML = `<div class="card"><strong>${data.event.name}</strong><br>${data.event.type} · ${data.event.event_date}<br>${data.event.description}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak'}</div>`;
-  const g = await sb.rpc('get_guest_gallery', { p_code: code });
-  if(g.data && g.data.photos) $('guestResult').innerHTML += `<p>Foto yang sudah disetujui: ${g.data.photos.length}</p>`;
+  guestCode = code;
+  $('guestResult').innerHTML = `<div class="card"><strong>${data.event.name}</strong><br>${data.event.type} · ${data.event.event_date}<br>${data.event.description}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak — hanya pada hari acara'}</div>`;
+  $('guestUpload').classList.toggle('hidden', !data.uploads_open);
+  await loadGuestGallery();
 });
 refreshAuth();
+

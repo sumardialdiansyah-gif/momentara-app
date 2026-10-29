@@ -141,13 +141,8 @@ $('formAuth').addEventListener('submit', async (e)=>{
   } else {
     res = await sb.auth.signInWithPassword({ email, password });
   }
-  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await setTimeout(()=>{
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const autoCode = (params.get('code') || params.get('guest') || '').trim().toUpperCase();
-    if(autoCode){ show('view-guest'); $('guestCode').value = autoCode; $('formGuest').dispatchEvent(new Event('submit')); }
-  } catch(err) {}
-}, 800);
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await refreshAuth(); }
+});
 $('formUpload').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const file = $('upFile').files[0]; if(!file){ $('upMsg').textContent='Pilih foto dulu.'; return; }
@@ -168,8 +163,7 @@ $('formUpload').addEventListener('submit', async (e)=>{
     $('upFile').value='';
   } catch(err){ $('upMsg').textContent='Upload gagal: ' + err.message; }
 });
-refreshAuth(); }
-});
+re
 $('btnLogout').addEventListener('click', async ()=>{ await sb.auth.signOut(); await refreshAuth(); });
 $('formEvent').addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -203,5 +197,12 @@ $('formGuest').addEventListener('submit', async (e)=>{
   await loadGuestGallery();
 });
 refreshAuth();
+setTimeout(()=>{
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const autoCode = (params.get('code') || params.get('guest') || '').trim().toUpperCase();
+    if(autoCode){ show('view-guest'); $('guestCode').value = autoCode; $('formGuest').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }
+  } catch(err) {}
+}, 800);
 
 </script></body></html>

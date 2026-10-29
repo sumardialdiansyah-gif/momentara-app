@@ -1,10 +1,103 @@
 <!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MOMENTARA — Aplikasi Publik</title><link rel="stylesheet" href="/styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head><body>
-<header class="top"><div class="wrap nav"><strong>MOMENTARA</strong><button data-view="view-home">Beranda</button><button data-view="view-auth">Masuk / Daftar</button><button data-view="view-dashboard">Dashboard</button><button data-view="view-guest">Tamu</button><button id="btnLogout" class="hidden">Keluar</button></div></header>
+<header class="top"><div class="wrap nav"><strong>MOMENTARA</strong><button data-view="view-home" onclick="show(\'view-home\')">Beranda</button><button data-view="view-auth" onclick="show(\'view-auth\')">Masuk / Daftar</button><button data-view="view-dashboard" onclick="show(\'view-dashboard\')">Dashboard</button><button data-view="view-guest" onclick="show(\'view-guest\')">Tamu</button><button id="btnLogout" class="hidden">Keluar</button></div></header>
 <main class="wrap">
 <p id="authStatus">Memuat…</p><p id="msg"></p>
-<section id="view-home" class="view"><h1>Foto dari Setiap Sudut. Kenangan dalam Satu Cerita.</h1><p>Biarkan semua tamu ikut mengabadikan momen. Satu QR Code mengumpulkan kenangan mereka ke dalam satu galeri yang indah.</p><p><button data-view="view-auth">Buat Acara</button> <button data-view="view-guest">Masuk sebagai Tamu</button></p><p class="small">Harga awal pengujian: Gratis, Personal Rp49.000, Premium Rp149.000, Partner mulai Rp199.000/bulan. Pembayaran masih sandbox/manual sampai gateway produksi terverifikasi.</p></section>
+<section id="view-home" class="view"><h1>Foto dari Setiap Sudut. Kenangan dalam Satu Cerita.</h1><p>Biarkan semua tamu ikut mengabadikan momen. Satu QR Code mengumpulkan kenangan mereka ke dalam satu galeri yang indah.</p><p><button data-view="view-auth" onclick="show(\'view-auth\')">Buat Acara</button> <button data-view="view-guest" onclick="show(\'view-guest\')">Masuk sebagai Tamu</button></p><p class="small">Harga awal pengujian: Gratis, Personal Rp49.000, Premium Rp149.000, Partner mulai Rp199.000/bulan. Pembayaran masih sandbox/manual sampai gateway produksi terverifikasi.</p></section>
 <section id="view-auth" class="view hidden"><h2>Masuk / Daftar</h2><form id="formAuth"><label>Email <input id="authEmail" type="email" required></label><label>Kata sandi <input id="authPassword" type="password" minlength="8" required></label><label>Mode <select id="authMode"><option value="login">Login</option><option value="signup">Daftar baru (owner)</option></select></label><button type="submit">Lanjutkan</button></form><p class="small">Akun baru ber-role owner. Admin hanya berdasarkan role di server, bukan parameter browser.</p></section>
 <section id="view-dashboard" class="view hidden"><h2>Dashboard Saya</h2><div id="planList" class="cards"></div><h3>Acara Saya</h3><div id="eventList"></div><h3>Buat Acara</h3><form id="formEvent"><label>Nama acara <input id="evName" required></label><label>Jenis <input id="evType" value="Pernikahan" required></label><label>Tanggal <input id="evDate" type="date" required></label><label>Jam <input id="evTime" type="time" value="10:00" required></label><label>Deskripsi <textarea id="evDesc"></textarea></label><label>Paket <select id="evPlan"><option value="gratis">Gratis</option><option value="personal">Personal</option><option value="premium">Premium</option><option value="partner">Partner</option></select></label><button type="submit">Buat Acara</button></form><p class="small">Setelah acara dibuat, kode tamu ditampilkan di pesan atas. Foto tamu, moderasi, dan ekspor album lengkap ada di versi aplikasi privat; versi publik ini adalah tahap pertama dengan daftar, dashboard, buat acara, dan pembuka tamu.</p></section>
 <section id="view-guest" class="view hidden"><h2>Masuk sebagai Tamu</h2><form id="formGuest"><label>Kode acara <input id="guestCode" required></label><button type="submit">Buka Acara</button></form><div id="guestResult"></div><p class="small">Upload foto tamu lewat kamera/galeri dan moderasi penuh akan ditambahkan setelah fungsi tamu terverifikasi lintas pengguna.</p></section>
 </main>
-<script src="/config.js"></script><script src="/app.js"></script></body></html>
+<script>
+window.addEventListener('error', function(e){ var m=document.getElementById('msg'); if(m) m.textContent='Kesalahan skrip: '+(e.message||'tidak diketahui'); });
+
+const { supabaseUrl, supabaseAnonKey } = MOMENTARA_CONFIG;
+let supabase = null;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+  }
+} catch (e) { supabase = null; }
+// Navigasi selalu dipasang dulu, terlepas dari status Supabase, agar tombol tidak macet.
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
+const $ = (id) => document.getElementById(id);
+function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); }
+function msg(t){ $('msg').textContent = t; }
+async function refreshAuth(){
+  if(!supabase){ $('authStatus').textContent = 'Layanan login belum termuat. Coba muat ulang halaman.'; show('view-home'); return; }
+  let user = null;
+  try {
+    const res = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
+    ]);
+    user = res.data.user;
+  } catch (e) {
+    $('authStatus').textContent = 'Tidak dapat memeriksa sesi (' + e.message + '). Formulir tetap bisa dibuka.';
+    show('view-home'); return;
+  }
+  if(user){
+    $('authStatus').textContent = 'Masuk sebagai ' + user.email;
+    $('btnLogout').classList.remove('hidden');
+    show('view-dashboard'); await loadDashboard();
+  } else {
+    $('authStatus').textContent = 'Belum masuk.';
+    $('btnLogout').classList.add('hidden');
+    show('view-home');
+  }
+}
+async function loadDashboard(){
+  const { data: { user } } = await supabase.auth.getUser(); if(!user) return;
+  const { data, error } = await supabase.from('events').select('*').eq('owner_id', user.id).order('created_at', {ascending:false});
+  if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
+  $('eventList').innerHTML = data.length ? data.map(e=>`<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br><button onclick="openGuest('${e.id}')">Lihat sebagai tamu (butuh kode)</button></div>`).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  const { data: plans } = await supabase.from('plans').select('*').eq('is_active', true);
+  if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${p.name}</strong> — Rp${p.price_idr.toLocaleString('id-ID')}<br>${p.photo_quota} foto · maks ${p.max_events} acara · ${p.active_days} hari</div>`).join('');
+}
+async function openGuest(id){ msg('Untuk membuka sebagai tamu, minta kode acara dari pemilik, lalu pakai formulir Tamu di bawah.'); show('view-guest'); }
+window.openGuest = openGuest;
+$('formAuth').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = $('authEmail').value, password = $('authPassword').value, mode = $('authMode').value;
+  let res;
+  if(mode === 'signup'){
+    res = await supabase.auth.signUp({ email, password });
+    if(res.data.user){
+      await supabase.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' });
+    }
+  } else {
+    res = await supabase.auth.signInWithPassword({ email, password });
+  }
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { msg('Berhasil.'); await refreshAuth(); }
+});
+$('btnLogout').addEventListener('click', async ()=>{ await supabase.auth.signOut(); await refreshAuth(); });
+$('formEvent').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const { data: { user } } = await supabase.auth.getUser(); if(!user){ msg('Masuk dulu sebelum membuat acara.'); return; }
+  const code = Math.random().toString(36).slice(2,8).toUpperCase();
+  const token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const ev = {
+    owner_id: user.id, name: $('evName').value, type: $('evType').value, event_date: $('evDate').value,
+    event_time: $('evTime').value, timezone: 'Asia/Jakarta', description: $('evDesc').value,
+    cover_style: 'classic', theme: 'ivory', accent: '#D8BE96', font_style: 'serif',
+    plan_id: $('evPlan').value, moderation: true, visibility: 'open', allow_download: true, allow_messages: true,
+    status: 'active', upload_start: $('evDate').value + 'T00:00:00+07:00', upload_end: $('evDate').value + 'T23:59:00+07:00'
+  };
+  const { data, error } = await supabase.from('events').insert(ev).select().single();
+  if(error){ msg('Gagal membuat acara: ' + error.message); return; }
+  const { error: terr } = await supabase.from('event_access_tokens').insert({ event_id: data.id, code, token });
+  if(terr){ msg('Acara dibuat, tetapi token gagal: ' + terr.message); return; }
+  msg('Acara dibuat. Kode tamu: ' + code + ' — bagikan kode ini ke tamu.');
+  await loadDashboard();
+});
+$('formGuest').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const code = $('guestCode').value.trim().toUpperCase();
+  const { data, error } = await supabase.rpc('get_guest_event', { p_code: code });
+  if(error || !data || !data.event){ msg('Kode acara tidak valid atau sudah dicabut.'); return; }
+  $('guestResult').innerHTML = `<div class="card"><strong>${data.event.name}</strong><br>${data.event.type} · ${data.event.event_date}<br>${data.event.description}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak'}</div>`;
+  const g = await supabase.rpc('get_guest_gallery', { p_code: code });
+  if(g.data && g.data.photos) $('guestResult').innerHTML += `<p>Foto yang sudah disetujui: ${g.data.photos.length}</p>`;
+});
+refreshAuth();
+
+</script></body></html>

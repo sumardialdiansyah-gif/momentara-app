@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MOMENTARA — Aplikasi Publik</title><link rel="stylesheet" href="/styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head><body>
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MOMENTARA — Aplikasi Publik</title><link rel="stylesheet" href="/styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script></head><body>
 <header class="top"><div class="wrap nav"><strong>MOMENTARA</strong><button data-view="view-home" onclick="show('view-home')">Beranda</button><button data-view="view-auth" onclick="show('view-auth')">Masuk / Daftar</button><button data-view="view-dashboard" onclick="show('view-dashboard')">Dashboard</button><button data-view="view-guest" onclick="show('view-guest')">Tamu</button><button id="btnLogout" class="hidden">Keluar</button></div></header>
 <main class="wrap">
 <p id="authStatus">Memuat…</p><p id="msg"></p>
@@ -7,7 +7,8 @@
 <section id="view-dashboard" class="view hidden"><h2>Dashboard Saya</h2><div id="planList" class="cards"></div><h3>Acara Saya</h3><div id="eventList"></div><h3>Moderasi Foto</h3><div id="moderationArea"><p class="small">Pilih tombol Moderasi pada sebuah acara untuk melihat foto yang menunggu persetujuan.</p></div><h3>Buat Acara</h3><form id="formEvent"><label>Nama acara <input id="evName" required></label><label>Jenis <input id="evType" value="Pernikahan" required></label><label>Tanggal <input id="evDate" type="date" required></label><label>Jam <input id="evTime" type="time" value="10:00" required></label><label>Deskripsi <textarea id="evDesc"></textarea></label><label>Paket <select id="evPlan"><option value="gratis">Gratis</option><option value="personal">Personal</option><option value="premium">Premium</option><option value="partner">Partner</option></select></label><button type="submit">Buat Acara</button></form><p class="small">Setelah acara dibuat, kode tamu ditampilkan di pesan atas dan di kartu acara. Foto tamu yang diunggah masuk sebagai menunggu moderasi dan hanya tampil di galeri setelah owner menyetujuinya.</p></section>
 <section id="view-guest" class="view hidden"><h2>Masuk sebagai Tamu</h2><form id="formGuest"><label>Kode acara <input id="guestCode" required></label><button type="submit">Buka Acara</button></form><div id="guestResult"></div>
 <div id="guestUpload" class="hidden"><h3>Unggah Foto</h3><form id="formUpload"><label>Nama tamu <input id="upName" required></label><label>Filter <select id="upFilter"><option>Natural</option><option>Warm Film</option><option>Vintage</option><option>Soft Portrait</option><option>Black and White</option><option>Cool Night</option><option>Disposable Camera</option></select></label><label>Foto (kamera/galeri) <input id="upFile" type="file" accept="image/*" required></label><p><img id="upPreview" class="hidden" style="max-width:100%;border-radius:12px"></p><button type="submit">Unggah Foto</button></form><p id="upMsg" class="small">Foto yang diunggah masuk moderasi dulu dan belum tampil di galeri sampai owner menyetujuinya. Upload hanya dibuka pada hari acara.</p>
-<h3>Slideshow Foto Disetujui</h3><div class="card"><p id="slideEmpty">Belum ada foto yang disetujui.</p><img id="slideImg" class="hidden" style="width:100%;border-radius:12px"><p id="slideCap"></p><p><button type="button" id="slidePrev">Sebelumnya</button> <button type="button" id="slideNext">Berikutnya</button> <button type="button" id="slidePlay">Putar Otomatis</button></p></div>
+</div>
+<div id="guestShowcase" class="hidden"><h3>Slideshow Foto Disetujui</h3><div class="card"><p id="slideEmpty">Belum ada foto yang disetujui.</p><img id="slideImg" class="hidden" style="width:100%;border-radius:12px"><p id="slideCap"></p><p><button type="button" id="slidePrev">Sebelumnya</button> <button type="button" id="slideNext">Berikutnya</button> <button type="button" id="slidePlay">Putar Otomatis</button></p></div>
 <h3>Galeri Disetujui</h3><div id="guestGallery"></div></div>
 <p class="small">Moderasi penuh dan slideshow kini tersedia di aplikasi publik ini; ekspor ZIP dan album rangkuman masih menyusul.</p></section>
 </main>
@@ -77,10 +78,38 @@ async function loadDashboard(){
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
   const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
   const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
-  $('eventList').innerHTML = data.length ? data.map(e=>`<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br>Kode tamu: <strong>${codeMap[e.id]||'-'}</strong><br><button onclick="loadModeration('${e.id}','${e.name.replace(/'/g,'')}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br>Kode tamu: <strong>${gc||'-'}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${e.name.replace(/'/g,'')}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${e.name.replace(/'/g,'')}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
   if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${p.name}</strong> — Rp${p.price_idr.toLocaleString('id-ID')}<br>${p.photo_quota} foto · maks ${p.max_events} acara · ${p.active_days} hari</div>`).join('');
 }
+function guestLink(code){ return window.location.origin + '/?code=' + code; }
+function copyGuestLink(code){
+  const link = guestLink(code);
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(link).then(()=>msg('Link tamu disalin: ' + link)).catch(()=>msg('Link tamu: ' + link)); }
+  else { msg('Link tamu: ' + link); }
+}
+window.copyGuestLink = copyGuestLink;
+function shareGuestWA(code, name){
+  const link = guestLink(code);
+  const text = encodeURIComponent('Undangan ' + name + ': buka link ini untuk mengunggah dan melihat foto acara: ' + link);
+  window.open('https://wa.me/?text=' + text, '_blank');
+}
+window.shareGuestWA = shareGuestWA;
+async function showQR(code, boxId){
+  const box = $(boxId); if(!box) return;
+  const link = guestLink(code);
+  box.innerHTML = '<p class="small">Membuat QR…</p>';
+  try {
+    if(window.QRCode && window.QRCode.toDataURL){
+      const url = await window.QRCode.toDataURL(link, { width: 220, margin: 1 });
+      box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+    } else {
+      const url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link);
+      box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+    }
+  } catch(err){ box.innerHTML = '<p>QR gagal dibuat: ' + err.message + '</p>'; }
+}
+window.showQR = showQR;
 async function loadModeration(eventId, eventName){
   const { data, error } = await sb.from('media_assets').select('*').eq('event_id', eventId).eq('status','pending').order('created_at', {ascending:false});
   if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi: ' + error.message + '</p>'; return; }
@@ -112,7 +141,14 @@ $('formAuth').addEventListener('submit', async (e)=>{
   } else {
     res = await sb.auth.signInWithPassword({ email, password });
   }
-  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await $('formUpload').addEventListener('submit', async (e)=>{
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await setTimeout(()=>{
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const autoCode = (params.get('code') || params.get('guest') || '').trim().toUpperCase();
+    if(autoCode){ show('view-guest'); $('guestCode').value = autoCode; $('formGuest').dispatchEvent(new Event('submit')); }
+  } catch(err) {}
+}, 800);
+$('formUpload').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const file = $('upFile').files[0]; if(!file){ $('upMsg').textContent='Pilih foto dulu.'; return; }
   const filterName = $('upFilter').value;
@@ -163,6 +199,7 @@ $('formGuest').addEventListener('submit', async (e)=>{
   guestCode = code;
   $('guestResult').innerHTML = `<div class="card"><strong>${data.event.name}</strong><br>${data.event.type} · ${data.event.event_date}<br>${data.event.description}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak — hanya pada hari acara'}</div>`;
   $('guestUpload').classList.toggle('hidden', !data.uploads_open);
+  $('guestShowcase').classList.remove('hidden');
   await loadGuestGallery();
 });
 refreshAuth();

@@ -64,10 +64,38 @@ async function loadDashboard(){
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
   const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
   const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
-  $('eventList').innerHTML = data.length ? data.map(e=>`<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br>Kode tamu: <strong>${codeMap[e.id]||'-'}</strong><br><button onclick="loadModeration('${e.id}','${e.name.replace(/'/g,'')}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${e.name}</strong><br>${e.type} · ${e.event_date} ${e.event_time}<br>Status: ${e.status} · Paket: ${e.plan_id}<br>Kode tamu: <strong>${gc||'-'}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${e.name.replace(/'/g,'')}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${e.name.replace(/'/g,'')}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
   if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${p.name}</strong> — Rp${p.price_idr.toLocaleString('id-ID')}<br>${p.photo_quota} foto · maks ${p.max_events} acara · ${p.active_days} hari</div>`).join('');
 }
+function guestLink(code){ return window.location.origin + '/?code=' + code; }
+function copyGuestLink(code){
+  const link = guestLink(code);
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(link).then(()=>msg('Link tamu disalin: ' + link)).catch(()=>msg('Link tamu: ' + link)); }
+  else { msg('Link tamu: ' + link); }
+}
+window.copyGuestLink = copyGuestLink;
+function shareGuestWA(code, name){
+  const link = guestLink(code);
+  const text = encodeURIComponent('Undangan ' + name + ': buka link ini untuk mengunggah dan melihat foto acara: ' + link);
+  window.open('https://wa.me/?text=' + text, '_blank');
+}
+window.shareGuestWA = shareGuestWA;
+async function showQR(code, boxId){
+  const box = $(boxId); if(!box) return;
+  const link = guestLink(code);
+  box.innerHTML = '<p class="small">Membuat QR…</p>';
+  try {
+    if(window.QRCode && window.QRCode.toDataURL){
+      const url = await window.QRCode.toDataURL(link, { width: 220, margin: 1 });
+      box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+    } else {
+      const url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link);
+      box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+    }
+  } catch(err){ box.innerHTML = '<p>QR gagal dibuat: ' + err.message + '</p>'; }
+}
+window.showQR = showQR;
 async function loadModeration(eventId, eventName){
   const { data, error } = await sb.from('media_assets').select('*').eq('event_id', eventId).eq('status','pending').order('created_at', {ascending:false});
   if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi: ' + error.message + '</p>'; return; }
@@ -99,7 +127,14 @@ $('formAuth').addEventListener('submit', async (e)=>{
   } else {
     res = await sb.auth.signInWithPassword({ email, password });
   }
-  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await $('formUpload').addEventListener('submit', async (e)=>{
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await setTimeout(()=>{
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const autoCode = (params.get('code') || params.get('guest') || '').trim().toUpperCase();
+    if(autoCode){ show('view-guest'); $('guestCode').value = autoCode; $('formGuest').dispatchEvent(new Event('submit')); }
+  } catch(err) {}
+}, 800);
+$('formUpload').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const file = $('upFile').files[0]; if(!file){ $('upMsg').textContent='Pilih foto dulu.'; return; }
   const filterName = $('upFilter').value;
@@ -150,6 +185,7 @@ $('formGuest').addEventListener('submit', async (e)=>{
   guestCode = code;
   $('guestResult').innerHTML = `<div class="card"><strong>${data.event.name}</strong><br>${data.event.type} · ${data.event.event_date}<br>${data.event.description}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak — hanya pada hari acara'}</div>`;
   $('guestUpload').classList.toggle('hidden', !data.uploads_open);
+  $('guestShowcase').classList.remove('hidden');
   await loadGuestGallery();
 });
 refreshAuth();

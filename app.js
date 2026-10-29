@@ -56,7 +56,7 @@ $('formAuth').addEventListener('submit', async (e)=>{
   } else {
     res = await sb.auth.signInWithPassword({ email, password });
   }
-  if(res.error) msg('Auth gagal: ' + res.error.message); else { msg('Berhasil.'); await refreshAuth(); }
+  if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0], role: 'owner' }); } msg('Berhasil.'); await refreshAuth(); }
 });
 $('btnLogout').addEventListener('click', async ()=>{ await sb.auth.signOut(); await refreshAuth(); });
 $('formEvent').addEventListener('submit', async (e)=>{
@@ -71,6 +71,7 @@ $('formEvent').addEventListener('submit', async (e)=>{
     plan_id: $('evPlan').value, moderation: true, visibility: 'open', allow_download: true, allow_messages: true,
     status: 'active', upload_start: $('evDate').value + 'T00:00:00+07:00', upload_end: $('evDate').value + 'T23:59:00+07:00'
   };
+  await sb.from('profiles').upsert({ id: user.id, email: user.email, name: user.email.split('@')[0], role: 'owner' });
   const { data, error } = await sb.from('events').insert(ev).select().single();
   if(error){ msg('Gagal membuat acara: ' + error.message); return; }
   const { error: terr } = await sb.from('event_access_tokens').insert({ event_id: data.id, code, token });

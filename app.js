@@ -1,11 +1,29 @@
 
 const { supabaseUrl, supabaseAnonKey } = MOMENTARA_CONFIG;
-const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+let supabase = null;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+  }
+} catch (e) { supabase = null; }
+// Navigasi selalu dipasang dulu, terlepas dari status Supabase, agar tombol tidak macet.
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
 const $ = (id) => document.getElementById(id);
 function show(id){ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $(id).classList.remove('hidden'); }
 function msg(t){ $('msg').textContent = t; }
 async function refreshAuth(){
-  const { data: { user } } = await supabase.auth.getUser();
+  if(!supabase){ $('authStatus').textContent = 'Layanan login belum termuat. Coba muat ulang halaman.'; show('view-home'); return; }
+  let user = null;
+  try {
+    const res = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
+    ]);
+    user = res.data.user;
+  } catch (e) {
+    $('authStatus').textContent = 'Tidak dapat memeriksa sesi (' + e.message + '). Formulir tetap bisa dibuka.';
+    show('view-home'); return;
+  }
   if(user){
     $('authStatus').textContent = 'Masuk sebagai ' + user.email;
     $('btnLogout').classList.remove('hidden');
@@ -69,5 +87,4 @@ $('formGuest').addEventListener('submit', async (e)=>{
   const g = await supabase.rpc('get_guest_gallery', { p_code: code });
   if(g.data && g.data.photos) $('guestResult').innerHTML += `<p>Foto yang sudah disetujui: ${g.data.photos.length}</p>`;
 });
-document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
 refreshAuth();

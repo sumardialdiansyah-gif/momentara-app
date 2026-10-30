@@ -82,7 +82,7 @@ async function loadDashboard(){
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
   const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
   const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
-  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${encodeURIComponent(e.name)}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${encodeURIComponent(e.name)}')">Moderasi</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${encodeURIComponent(e.name)}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${encodeURIComponent(e.name)}')">Moderasi</button> <button onclick="deleteEvent('${e.id}','${encodeURIComponent(e.name)}')">Hapus</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
   if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${esc(p.name)}</strong> — Rp${Number(p.price_idr||0).toLocaleString('id-ID')}<br>${Number(p.photo_quota||0)} foto · maks ${Number(p.max_events||0)} acara · ${Number(p.active_days||0)} hari</div>`).join('');
 }
@@ -170,23 +170,23 @@ $('btnLogout').addEventListener('click', async ()=>{ await sb.auth.signOut(); aw
 $('formEvent').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const { data: { user } } = await sb.auth.getUser(); if(!user){ msg('Masuk dulu sebelum membuat acara.'); return; }
-  const _alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const _bytes = new Uint8Array(8); crypto.getRandomValues(_bytes); const code = Array.from(_bytes, b => _alphabet[b % 32]).join('');
-  const token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-  const ev = {
-    owner_id: user.id, name: $('evName').value, type: $('evType').value, event_date: $('evDate').value,
-    event_time: $('evTime').value, timezone: 'Asia/Jakarta', description: $('evDesc').value,
-    cover_style: 'classic', theme: 'ivory', accent: '#D8BE96', font_style: 'serif',
-    plan_id: $('evPlan').value, moderation: true, visibility: 'open', allow_download: true, allow_messages: true,
-    status: 'active', upload_start: $('evDate').value + 'T00:00:00+07:00', upload_end: $('evDate').value + 'T23:59:00+07:00'
-  };
-  await sb.from('profiles').upsert({ id: user.id, email: user.email, name: user.email.split('@')[0] });
-  const { data, error } = await sb.from('events').insert(ev).select().single();
+  const { data, error } = await sb.rpc('create_event', {
+    p_name: $('evName').value, p_type: $('evType').value, p_event_date: $('evDate').value,
+    p_event_time: $('evTime').value, p_description: $('evDesc').value, p_plan_id: $('evPlan').value
+  });
   if(error){ msg('Gagal membuat acara: ' + error.message); return; }
-  const { error: terr } = await sb.from('event_access_tokens').insert({ event_id: data.id, code, token });
-  if(terr){ msg('Acara dibuat, tetapi token gagal: ' + terr.message); return; }
-  msg('Acara dibuat. Kode tamu: ' + code + ' — bagikan kode ini ke tamu.');
+  msg('Acara dibuat. Kode tamu: ' + data.code + ' — bagikan kode ini ke tamu.');
   await loadDashboard();
 });
+async function deleteEvent(id, nameEnc){
+  const name = decodeURIComponent(nameEnc);
+  if(!confirm('Hapus acara "' + name + '" beserta foto dan kodenya? Tindakan ini tidak bisa dibatalkan.')) return;
+  const { error } = await sb.from('events').delete().eq('id', id);
+  if(error){ msg('Gagal menghapus acara.'); return; }
+  msg('Acara dihapus.');
+  await loadDashboard();
+}
+window.deleteEvent = deleteEvent;
 $('formGuest').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const code = $('guestCode').value.trim().toUpperCase();

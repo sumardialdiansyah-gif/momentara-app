@@ -166,6 +166,23 @@ $('formAuth').addEventListener('submit', async (e)=>{
   }
   if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0] }); } msg('Berhasil.'); await refreshAuth(); }
 });
+$('btnForgot').addEventListener('click', async ()=>{
+  const email = $('authEmail').value.trim();
+  if(!email){ msg('Isi email dulu, lalu ketuk "Lupa kata sandi?".'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: 'https://momentara-app.vercel.app/' });
+  if(error) msg('Reset gagal: ' + error.message);
+  else msg('Link reset dikirim ke email Anda. Buka link itu, lalu atur kata sandi baru di halaman ini.');
+});
+$('btnResetPass').addEventListener('click', async ()=>{
+  const pw = $('newPassword').value;
+  if(!pw || pw.length < 8){ msg('Kata sandi baru minimal 8 karakter.'); return; }
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if(error) msg('Gagal menyimpan kata sandi baru: ' + error.message);
+  else { msg('Kata sandi baru tersimpan. Silakan login dengan kata sandi baru.'); $('resetBox').classList.add('hidden'); await sb.auth.signOut(); await refreshAuth(); }
+});
+sb.auth.onAuthStateChange((event)=>{
+  if(event === 'PASSWORD_RECOVERY'){ $('resetBox').classList.remove('hidden'); show('view-auth'); msg('Link reset terverifikasi. Atur kata sandi baru di bawah.'); }
+});
 $('formUpload').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const file = $('upFile').files[0]; if(!file){ $('upMsg').textContent='Pilih foto dulu.'; return; }

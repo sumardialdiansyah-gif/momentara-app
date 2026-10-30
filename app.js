@@ -82,7 +82,7 @@ async function loadDashboard(){
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
   const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
   const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
-  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${encodeURIComponent(e.name)}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${encodeURIComponent(e.name)}')">Moderasi</button> <button onclick="deleteEvent('${e.id}','${encodeURIComponent(e.name)}')">Hapus</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${encodeURIComponent(e.name)}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${encodeURIComponent(e.name)}')">Moderasi</button> <button onclick="deleteEvent('${e.id}','${encodeURIComponent(e.name)}',this)">Hapus</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
   if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${esc(p.name)}</strong> — Rp${Number(p.price_idr||0).toLocaleString('id-ID')}<br>${Number(p.photo_quota||0)} foto · maks ${Number(p.max_events||0)} acara · ${Number(p.active_days||0)} hari</div>`).join('');
 }
@@ -178,9 +178,15 @@ $('formEvent').addEventListener('submit', async (e)=>{
   msg('Acara dibuat. Kode tamu: ' + data.code + ' — bagikan kode ini ke tamu.');
   await loadDashboard();
 });
-async function deleteEvent(id, nameEnc){
+async function deleteEvent(id, nameEnc, btn){
   const name = decodeURIComponent(nameEnc);
-  if(!confirm('Hapus acara "' + name + '" beserta foto dan kodenya? Tindakan ini tidak bisa dibatalkan.')) return;
+  // Konfirmasi dua ketukan di dalam halaman (bukan window.confirm), karena dialog
+  // native browser dibatalkan otomatis oleh otomatisasi dan sulit di HP.
+  if(btn && btn.dataset.armed !== '1'){
+    btn.dataset.armed = '1'; const oldText = btn.textContent; btn.textContent = 'Yakin hapus? Klik lagi';
+    setTimeout(()=>{ btn.dataset.armed = ''; btn.textContent = oldText; }, 5000);
+    return;
+  }
   const { error } = await sb.from('events').delete().eq('id', id);
   if(error){ msg('Gagal menghapus acara.'); return; }
   msg('Acara dihapus.');

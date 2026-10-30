@@ -10,6 +10,22 @@ try {
 } catch (e) { sb = null; }
 // Navigasi selalu dipasang dulu, terlepas dari status Supabase, agar tombol tidak macet.
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>show(b.dataset.view)));
+document.addEventListener('click', async (e)=>{
+  const b = e.target.closest ? e.target.closest('button[data-action]') : null; if(!b) return;
+  const a = b.dataset.action;
+  if(a === 'fab') fabAction();
+  else if(a === 'purge') purgeExpired(b);
+  else if(a === 'delete-account') deleteOwnAccount(b);
+  else if(a === 'load-more') loadGuestGallery(false);
+  else if(a === 'copy-link') copyGuestLink(b.dataset.code);
+  else if(a === 'share-wa') shareGuestWA(b.dataset.code, b.dataset.name);
+  else if(a === 'show-qr') showQR(b.dataset.code, b.dataset.target);
+  else if(a === 'load-mod') loadModeration(b.dataset.event, b.dataset.name);
+  else if(a === 'delete-event') deleteEvent(b.dataset.event, b.dataset.name, b);
+  else if(a === 'open-guest') openGuest(b.dataset.event);
+  else if(a === 'moderate') moderatePhoto(b.dataset.photo, b.dataset.event, b.dataset.status);
+  else if(a === 'delete-photo') deletePhoto(b.dataset.photo, b.dataset.event, b);
+});
 const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function safeImgSrc(s){ const v = String(s || ''); return v.startsWith('data:image/jpeg;base64,') ? v : ''; }
@@ -56,7 +72,7 @@ async function loadGuestGallery(reset){
   slidePhotos = slidePhotos.concat(page);
   galleryOffset += page.length;
   slideIdx = 0; stopSlide(); renderSlide();
-  const moreBtn = (g.data && g.data.has_more) ? `<p><button onclick="loadGuestGallery(false)">Muat lebih banyak foto (${galleryOffset}/${galleryTotal})</button></p>` : '';
+  const moreBtn = (g.data && g.data.has_more) ? `<p><button data-action="load-more">Muat lebih banyak foto (${galleryOffset}/${galleryTotal})</button></p>` : '';
   $('guestGallery').innerHTML = (slidePhotos.length ? slidePhotos.map(ph=>`<div class="card"><img loading="lazy" src="${safeImgSrc(ph.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(ph.guest_name||'Tamu')} · ${esc(ph.filter_name||'')}</div>`).join('') : '<p>Belum ada foto yang disetujui.</p>') + moreBtn;
 }
 async function refreshAuth(){
@@ -88,7 +104,7 @@ async function loadDashboard(){
   if(error){ msg('Gagal memuat dashboard: ' + error.message); return; }
   const { data: toks } = await sb.from('event_access_tokens').select('event_id,code');
   const codeMap = {}; (toks||[]).forEach(x=>{ codeMap[x.event_id]=x.code; });
-  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button onclick="copyGuestLink('${gc}')">Salin Link</button> <button onclick="shareGuestWA('${gc}','${encodeURIComponent(e.name)}')">Bagikan via WhatsApp</button> <button onclick="showQR('${gc}','qr-${e.id}')">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button onclick="loadModeration('${e.id}','${encodeURIComponent(e.name)}')">Moderasi</button> <button onclick="deleteEvent('${e.id}','${encodeURIComponent(e.name)}',this)">Hapus</button> <button onclick="openGuest('${e.id}')">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
+  $('eventList').innerHTML = data.length ? data.map(e=>{ const gc = codeMap[e.id]||''; const gl = gc ? guestLink(gc) : ''; return `<div class="card"><strong>${esc(e.name)}</strong><br>${esc(e.type)} · ${esc(e.event_date)} ${esc(e.event_time)}<br>Status: ${esc(e.status)} · Paket: ${esc(e.plan_id)}<br>Kode tamu: <strong>${esc(gc||'-')}</strong>${gl ? `<br>Link tamu: <a href="${gl}">${gl}</a><br><button data-action="copy-link" data-code="${gc}">Salin Link</button> <button data-action="share-wa" data-code="${gc}" data-name="${encodeURIComponent(e.name)}">Bagikan via WhatsApp</button> <button data-action="show-qr" data-code="${gc}" data-target="qr-${e.id}">Tampilkan QR</button><div id="qr-${e.id}"></div>` : ''}<br><button data-action="load-mod" data-event="${e.id}" data-name="${encodeURIComponent(e.name)}">Moderasi</button> <button data-action="delete-event" data-event="${e.id}" data-name="${encodeURIComponent(e.name)}">Hapus</button> <button data-action="open-guest" data-event="${e.id}">Buka sebagai tamu</button></div>`; }).join('') : '<p>Belum ada acara. Buat acara pertama dari formulir di bawah.</p>';
   const { data: plans } = await sb.from('plans').select('*').eq('is_active', true);
   if(plans) $('planList').innerHTML = plans.map(p=>`<div class="card"><strong>${esc(p.name)}</strong> — Rp${Number(p.price_idr||0).toLocaleString('id-ID')}<br>${Number(p.photo_quota||0)} foto · maks ${Number(p.max_events||0)} acara · ${Number(p.active_days||0)} hari</div>`).join('');
 }
@@ -122,7 +138,7 @@ window.showQR = showQR;
 async function loadModeration(eventId, eventNameEnc){ const eventName = decodeURIComponent(eventNameEnc);
   const { data, error } = await sb.from('media_assets').select('*').eq('event_id', eventId).eq('status','pending').order('created_at', {ascending:false});
   if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi.</p>'; return; }
-  $('moderationArea').innerHTML = '<h4>' + esc(eventName) + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${safeImgSrc(m.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(m.guest_name)} · ${esc(m.filter_name)}<br><button onclick="moderatePhoto('${m.id}','${eventId}','approved')">Setujui</button> <button onclick="moderatePhoto('${m.id}','${eventId}','rejected')">Tolak</button> <button onclick="deletePhoto('${m.id}','${eventId}',this)">Hapus foto</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
+  $('moderationArea').innerHTML = '<h4>' + esc(eventName) + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${safeImgSrc(m.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(m.guest_name)} · ${esc(m.filter_name)}<br><button data-action="moderate" data-photo="${m.id}" data-event="${eventId}" data-status="approved">Setujui</button> <button data-action="moderate" data-photo="${m.id}" data-event="${eventId}" data-status="rejected">Tolak</button> <button data-action="delete-photo" data-photo="${m.id}" data-event="${eventId}">Hapus foto</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
   show('view-dashboard');
 }
 window.loadModeration = loadModeration;

@@ -121,17 +121,21 @@ function shareGuestWA(code, nameEnc){ const name = decodeURIComponent(nameEnc);
   window.open('https://wa.me/?text=' + text, '_blank');
 }
 window.shareGuestWA = shareGuestWA;
-async function showQR(code, boxId){
+function showQR(code, boxId){
   const box = $(boxId); if(!box) return;
   const link = guestLink(code);
   box.innerHTML = '<p class="small">Membuat QR…</p>';
   try {
-    if(window.QRCode && window.QRCode.toDataURL){
-      const url = await window.QRCode.toDataURL(link, { width: 220, margin: 1 });
-      if(!url || typeof url !== 'string' || !url.startsWith('data:image/')) throw new Error('QR tidak menghasilkan gambar.');
-      box.id = box.id; box.classList.add('qrBoxPop'); box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
+    if(typeof QRCode === 'undefined') throw new Error('Pustaka QR tidak tersedia.');
+    box.innerHTML = '';
+    new QRCode(box, { text: link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    const img = box.querySelector('img'); const cv = box.querySelector('canvas');
+    const url = (img && img.src) ? img.src : (cv ? cv.toDataURL('image/png') : '');
+    box.classList.add('qrBoxPop');
+    if(url && url.startsWith('data:image/')){
+      box.insertAdjacentHTML('beforeend', `<br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`);
     } else {
-      throw new Error('Pustaka QR tidak tersedia.');
+      box.insertAdjacentHTML('beforeend', '<p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>');
     }
   } catch(err){ box.innerHTML = '<p>QR gagal dibuat: ' + esc(err && err.message ? err.message : String(err)) + '</p>'; }
 }

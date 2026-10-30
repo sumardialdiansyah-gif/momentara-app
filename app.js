@@ -207,6 +207,29 @@ async function deleteEvent(id, nameEnc, btn){
   await loadDashboard();
 }
 window.deleteEvent = deleteEvent;
+
+async function twoTap(btn, label){
+  if(btn.dataset.armed !== '1'){ btn.dataset.armed = '1'; const old = btn.textContent; btn.textContent = 'Yakin? Klik lagi'; setTimeout(()=>{ btn.dataset.armed = ''; btn.textContent = old; }, 5000); return false; }
+  btn.dataset.armed = ''; return true;
+}
+async function purgeExpired(btn){
+  if(!(await twoTap(btn, 'purge'))) return;
+  const { data, error } = await sb.rpc('purge_my_expired_events');
+  if(error){ msg('Gagal membersihkan data lama.'); return; }
+  msg('Data lama dibersihkan: ' + (data && data.deleted_events !== undefined ? data.deleted_events : 0) + ' acara dihapus.');
+  await loadDashboard();
+}
+window.purgeExpired = purgeExpired;
+async function deleteOwnAccount(btn){
+  if(!(await twoTap(btn, 'delete'))) return;
+  const { error } = await sb.rpc('delete_own_account');
+  if(error){ msg('Gagal menghapus akun.'); return; }
+  await sb.auth.signOut();
+  msg('Akun dan semua data Anda telah dihapus.');
+  await refreshAuth(); show('view-home');
+}
+window.deleteOwnAccount = deleteOwnAccount;
+
 $('formGuest').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const code = $('guestCode').value.trim().toUpperCase();

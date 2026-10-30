@@ -128,11 +128,12 @@ async function showQR(code, boxId){
   try {
     if(window.QRCode && window.QRCode.toDataURL){
       const url = await window.QRCode.toDataURL(link, { width: 220, margin: 1 });
+      if(!url || typeof url !== 'string' || !url.startsWith('data:image/')) throw new Error('QR tidak menghasilkan gambar.');
       box.id = box.id; box.classList.add('qrBoxPop'); box.innerHTML = `<img src="${url}" style="width:220px;height:220px;border-radius:12px"><br><a href="${url}" download="qr-tamu-${code}.png"><button type="button">Unduh QR</button></a><p class="small">Pindai QR ini untuk membuka acara tanpa mengetik kode.</p>`;
     } else {
       throw new Error('Pustaka QR tidak tersedia.');
     }
-  } catch(err){ box.innerHTML = '<p>QR gagal dibuat.</p>'; }
+  } catch(err){ box.innerHTML = '<p>QR gagal dibuat: ' + esc(err && err.message ? err.message : String(err)) + '</p>'; }
 }
 window.showQR = showQR;
 async function loadModeration(eventId, eventNameEnc){ const eventName = decodeURIComponent(eventNameEnc);
@@ -248,7 +249,7 @@ async function deleteEvent(id, nameEnc, btn){
 window.deleteEvent = deleteEvent;
 
 async function twoTap(btn, label){
-  if(btn.dataset.armed !== '1'){ btn.dataset.armed = '1'; const old = btn.textContent; btn.textContent = 'Yakin? Klik lagi'; setTimeout(()=>{ btn.dataset.armed = ''; btn.textContent = old; }, 5000); return false; }
+  if(btn.dataset.armed !== '1'){ btn.dataset.armed = '1'; const old = btn.textContent; btn.textContent = 'Yakin? Klik lagi'; setTimeout(()=>{ btn.dataset.armed = ''; btn.textContent = old; }, 10000); return false; }
   btn.dataset.armed = ''; return true;
 }
 async function purgeExpired(btn){

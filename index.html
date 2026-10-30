@@ -153,7 +153,7 @@ window.showQR = showQR;
 async function loadModeration(eventId, eventNameEnc){ const eventName = decodeURIComponent(eventNameEnc);
   const { data, error } = await sb.from('media_assets').select('*').eq('event_id', eventId).eq('status','pending').order('created_at', {ascending:false});
   if(error){ $('moderationArea').innerHTML = '<p>Gagal memuat moderasi.</p>'; return; }
-  $('moderationArea').innerHTML = '<h4>' + esc(eventName) + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${safeImgSrc(m.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(m.guest_name)} · ${esc(m.filter_name)}<br><button onclick="moderatePhoto('${m.id}','${eventId}','approved')">Setujui</button> <button onclick="moderatePhoto('${m.id}','${eventId}','rejected')">Tolak</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
+  $('moderationArea').innerHTML = '<h4>' + esc(eventName) + ' — menunggu: ' + data.length + '</h4>' + (data.length ? data.map(m=>`<div class="card"><img src="${safeImgSrc(m.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(m.guest_name)} · ${esc(m.filter_name)}<br><button onclick="moderatePhoto('${m.id}','${eventId}','approved')">Setujui</button> <button onclick="moderatePhoto('${m.id}','${eventId}','rejected')">Tolak</button> <button onclick="deletePhoto('${m.id}','${eventId}',this)">Hapus foto</button></div>`).join('') : '<p>Tidak ada foto menunggu.</p>');
   show('view-dashboard');
 }
 window.loadModeration = loadModeration;
@@ -167,6 +167,20 @@ async function moderatePhoto(photoId, eventId, status){
   await loadModeration(eventId, evName);
 }
 window.moderatePhoto = moderatePhoto;
+async function deletePhoto(photoId, eventId, btn){
+  if(btn && btn.dataset.armed !== '1'){
+    btn.dataset.armed = '1'; const oldText = btn.textContent; btn.textContent = 'Yakin hapus? Klik lagi';
+    setTimeout(()=>{ btn.dataset.armed = ''; btn.textContent = oldText; }, 5000);
+    return;
+  }
+  const { error } = await sb.from('media_assets').delete().eq('id', photoId);
+  if(error){ msg('Gagal menghapus foto.'); return; }
+  msg('Foto dihapus.');
+  const evNameEl = $('moderationArea').querySelector('h4');
+  const evName = evNameEl ? evNameEl.textContent.split(' — ')[0] : '';
+  await loadModeration(eventId, encodeURIComponent(evName));
+}
+window.deletePhoto = deletePhoto;
 async function openGuest(id){ msg('Untuk membuka sebagai tamu, minta kode acara dari pemilik, lalu pakai formulir Tamu di bawah.'); show('view-guest'); }
 window.openGuest = openGuest;
 $('formAuth').addEventListener('submit', async (e)=>{

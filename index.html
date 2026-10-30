@@ -84,11 +84,17 @@ $('slidePlay').addEventListener('click', ()=>{
   if(!slidePhotos.length) return;
   $('slidePlay').textContent='Jeda'; slideTimer=setInterval(()=>{ slideIdx=(slideIdx+1)%slidePhotos.length; renderSlide(); }, 4000);
 });
-async function loadGuestGallery(){
-  const g = await sb.rpc('get_guest_gallery', { p_code: guestCode });
-  slidePhotos = (g.data && g.data.photos) ? g.data.photos : [];
+let galleryOffset = 0, galleryTotal = 0;
+async function loadGuestGallery(reset){
+  if(reset){ galleryOffset = 0; galleryTotal = 0; slidePhotos = []; }
+  const g = await sb.rpc('get_guest_gallery', { p_code: guestCode, p_limit: 20, p_offset: galleryOffset });
+  const page = (g.data && g.data.photos) ? g.data.photos : [];
+  galleryTotal = (g.data && g.data.total !== undefined) ? g.data.total : page.length;
+  slidePhotos = slidePhotos.concat(page);
+  galleryOffset += page.length;
   slideIdx = 0; stopSlide(); renderSlide();
-  $('guestGallery').innerHTML = slidePhotos.length ? slidePhotos.map(ph=>`<div class="card"><img src="${safeImgSrc(ph.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(ph.guest_name||'Tamu')} · ${esc(ph.filter_name||'')}</div>`).join('') : '<p>Belum ada foto yang disetujui.</p>';
+  const moreBtn = (g.data && g.data.has_more) ? `<p><button onclick="loadGuestGallery(false)">Muat lebih banyak foto (${galleryOffset}/${galleryTotal})</button></p>` : '';
+  $('guestGallery').innerHTML = (slidePhotos.length ? slidePhotos.map(ph=>`<div class="card"><img loading="lazy" src="${safeImgSrc(ph.storage_path)}" style="width:100%;border-radius:12px"><br>${esc(ph.guest_name||'Tamu')} · ${esc(ph.filter_name||'')}</div>`).join('') : '<p>Belum ada foto yang disetujui.</p>') + moreBtn;
 }
 async function refreshAuth(){
   if(!sb){ $('authStatus').textContent = 'Layanan login belum termuat. Coba muat ulang halaman.'; show('view-home'); return; }
@@ -276,7 +282,7 @@ $('formGuest').addEventListener('submit', async (e)=>{
   $('guestResult').innerHTML = `<div class="card"><strong>${esc(data.event.name)}</strong><br>${esc(data.event.type)} · ${esc(data.event.event_date)}<br>${esc(data.event.description)}<br>Upload terbuka: ${data.uploads_open ? 'Ya' : 'Tidak — hanya pada hari acara'}</div>`;
   $('guestUpload').classList.toggle('hidden', !data.uploads_open);
   $('guestShowcase').classList.remove('hidden');
-  await loadGuestGallery();
+  await loadGuestGallery(true);
 });
 refreshAuth();
 setTimeout(()=>{

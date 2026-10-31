@@ -91,6 +91,9 @@ async function refreshAuth(){
   if(user){
     $('authStatus').textContent = 'Masuk sebagai ' + user.email;
     $('btnLogout').classList.remove('hidden');
+    // Akun OAuth (Google) tidak melewati formulir daftar, jadi pastikan baris
+    // profil owner-nya ada; upsert tanpa kolom role agar role server tidak berubah.
+    try { await sb.from('profiles').upsert({ id: user.id, email: user.email, name: (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0] }); } catch(e) {}
     show('view-dashboard'); await loadDashboard();
   } else {
     $('authStatus').textContent = 'Belum masuk.';
@@ -186,6 +189,11 @@ $('formAuth').addEventListener('submit', async (e)=>{
     res = await sb.auth.signInWithPassword({ email, password });
   }
   if(res.error) msg('Auth gagal: ' + res.error.message); else { if(res.data.user) { await sb.from('profiles').upsert({ id: res.data.user.id, email, name: email.split('@')[0] }); } msg('Berhasil.'); await refreshAuth(); }
+});
+$('btnGoogle').addEventListener('click', async ()=>{
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://momentara-app.vercel.app/' } });
+  if(error) msg('Login Google gagal: ' + error.message);
+  else msg('Mengalihkan ke Google…');
 });
 $('btnForgot').addEventListener('click', async ()=>{
   const email = $('authEmail').value.trim();
